@@ -81,6 +81,9 @@ class Signal<void(Param...)> {
   Signal(const Signal&) = delete;
   Signal(Signal&& signal);
 
+  Signal& operator=(const Signal&) = delete;
+  Signal& operator=(Signal&& signal);
+
   Sigcon Connect(const Handler& handler);
   void Emit(Param&&... param) const;
 
@@ -177,6 +180,14 @@ template <typename... Param>
 Signal<void(Param...)>::Signal(Signal&& signal) : sigdat_ptr_(std::move(signal.sigdat_ptr_))
 {
   signal.sigdat_ptr_ = nullptr;
+}
+
+template <typename... Param>
+Signal<void(Param...)>& Signal<void(Param...)>::operator=(Signal&& signal)
+{
+  sigdat_ptr_ = std::move(signal.sigdat_ptr_);
+  signal.sigdat_ptr_ = nullptr;
+  return *this;
 }
 
 template <typename... Param>
