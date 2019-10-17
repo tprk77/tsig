@@ -29,6 +29,14 @@
 #include <memory>
 #include <vector>
 
+#if defined(__GNUC__) && (__GNUC__ >= 4)
+#define TSIG_CHECK_RESULT __attribute__((warn_unused_result))
+#elif defined(_MSC_VER) && (_MSC_VER >= 1700)
+#define TSIG_CHECK_RESULT _Check_return_
+#else
+#define TSIG_CHECK_RESULT
+#endif
+
 namespace tsig {
 
 // template <typename Dispatcher>
@@ -84,7 +92,7 @@ class Signal<void(Param...)> {
   Signal& operator=(const Signal&) = delete;
   Signal& operator=(Signal&& signal);
 
-  Sigcon Connect(const Handler& handler);
+  TSIG_CHECK_RESULT Sigcon Connect(const Handler& handler);
   void Emit(Param&&... param) const;
 
  private:
@@ -231,5 +239,7 @@ void Sigdat<void(Param...)>::RemoveHandler(std::size_t handler_id)
 }  // namespace detail
 
 }  // namespace tsig
+
+#undef TSIG_CHECK_RESULT
 
 #endif  // TSIG_SIGNAL_HPP
