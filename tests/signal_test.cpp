@@ -210,6 +210,35 @@ TEST(Signal, MoveConnected)
   EXPECT_EQ(tester.CalledArgs(1), VoidSignalArgs("RED", 3, 4));
 }
 
+TEST(Signal, DropDuringEmit)
+{
+  VoidSignal signal;
+  std::vector<VoidSignalTester> testers(NUM_MULTI_TESTERS);
+  std::vector<tsig::Sigcon> sigcons;
+  for (std::size_t ii = 0; ii < NUM_MULTI_TESTERS; ++ii) {
+    // Each tester is riggid to disconnect the next one
+    VoidSignalTester& tester = testers.at(ii);
+    tester.SetPostHandler([&, ii]() {
+      const std::size_t next_index = (ii + 1) % NUM_MULTI_TESTERS;
+      sigcons.at(next_index).Reset();
+    });
+    sigcons.push_back(signal.Connect(std::ref(tester)));
+  }
+  for (VoidSignalTester& tester : testers) {
+    EXPECT_EQ(tester.NumCalls(), 0u);
+  }
+  signal.Emit("BLUE", 1, 2);
+  for (VoidSignalTester& tester : testers) {
+    ASSERT_EQ(tester.NumCalls(), 1u);
+    EXPECT_EQ(tester.CalledArgs(0), VoidSignalArgs("BLUE", 1, 2));
+  }
+  signal.Emit("RED", 3, 4);
+  for (VoidSignalTester& tester : testers) {
+    ASSERT_EQ(tester.NumCalls(), 1u);
+    EXPECT_EQ(tester.CalledArgs(0), VoidSignalArgs("BLUE", 1, 2));
+  }
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);

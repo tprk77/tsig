@@ -223,9 +223,12 @@ std::size_t Sigdat<void(Param...)>::AddHandler(const std::function<void(Param...
 template <typename... Param>
 void Sigdat<void(Param...)>::CallHandlers(Param&&... param) const
 {
-  // TODO Dropped handlers during emit? Invalidated iterators?
-  for (const auto& handler_pair : handlers_) {
+  // Copy handlers to prevent in-flight modifications
+  const auto handlers = handlers_;
+  // TODO It would be more efficient to only copy if a modification takes place
+  for (const auto& handler_pair : handlers) {
     const std::function<void(Param...)>& handler = std::get<1>(handler_pair);
+    // TODO Better exception handling
     handler(std::forward<Param>(param)...);
   }
 }
