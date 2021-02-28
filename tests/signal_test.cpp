@@ -56,6 +56,65 @@ class VoidSignalTester {
   std::function<void(void)> post_handler_;
 };
 
+template <typename TesterType>
+class CopyMoveWrapper {
+ public:
+  CopyMoveWrapper(TesterType& tester)
+      : tester_(tester),
+        copy_count_ptr_(std::make_shared<std::size_t>(0)),
+        move_count_ptr_(std::make_shared<std::size_t>(0))
+  {
+    // Do nothing
+  }
+
+  CopyMoveWrapper(const CopyMoveWrapper& other)
+      : tester_(other.tester_),
+        copy_count_ptr_(other.copy_count_ptr_),
+        move_count_ptr_(other.move_count_ptr_)
+  {
+    ++(*copy_count_ptr_);
+  }
+
+  CopyMoveWrapper(CopyMoveWrapper&& other)
+      : tester_(other.tester_),
+        copy_count_ptr_(std::move(other.copy_count_ptr_)),
+        move_count_ptr_(std::move(other.move_count_ptr_))
+  {
+    ++(*move_count_ptr_);
+  }
+
+  void operator()(const std::string& str, int x, int y)
+  {
+    tester_(str, x, y);
+  }
+
+  void ResetCounts()
+  {
+    *copy_count_ptr_ = 0;
+    *move_count_ptr_ = 0;
+  }
+
+  TesterType& Tester() const
+  {
+    return *tester_;
+  }
+
+  std::size_t CopyCount() const
+  {
+    return *copy_count_ptr_;
+  }
+
+  std::size_t MoveCount() const
+  {
+    return *move_count_ptr_;
+  }
+
+ private:
+  TesterType& tester_;
+  std::shared_ptr<std::size_t> copy_count_ptr_;
+  std::shared_ptr<std::size_t> move_count_ptr_;
+};
+
 TEST(Signal, Construct)
 {
   VoidSignal signal;
@@ -80,6 +139,32 @@ TEST(Signal, Connect)
   VoidSignalTester tester;
   const tsig::Sigcon sigcon = signal.Connect(std::ref(tester));
   EXPECT_EQ(tester.NumCalls(), 0u);
+}
+
+TEST(Signal, ConnectHandlerCopy)
+{
+  VoidSignal signal;
+  VoidSignalTester tester;
+  CopyMoveWrapper<VoidSignalTester> wrapper(tester);
+  const tsig::Sigcon sigcon = signal.Connect(wrapper);
+  EXPECT_EQ(tester.NumCalls(), 0u);
+  EXPECT_EQ(wrapper.CopyCount(), 1u);
+  // NOTE The wrapper will get moved inside std::function
+  EXPECT_EQ(wrapper.MoveCount(), 1u);
+}
+
+TEST(Signal, ConnectHandlerMove)
+{
+  VoidSignal signal;
+  VoidSignalTester tester;
+  CopyMoveWrapper<VoidSignalTester> wrapper(tester);
+  CopyMoveWrapper<VoidSignalTester> move_wrapper(wrapper);
+  wrapper.ResetCounts();
+  const tsig::Sigcon sigcon = signal.Connect(std::move(move_wrapper));
+  EXPECT_EQ(tester.NumCalls(), 0u);
+  EXPECT_EQ(wrapper.CopyCount(), 0u);
+  // NOTE The wrapper will get moved inside std::function
+  EXPECT_EQ(wrapper.MoveCount(), 2u);
 }
 
 TEST(Signal, ConnectDropped)
