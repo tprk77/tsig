@@ -93,6 +93,7 @@ class Signal<void(Param...)> {
   Signal& operator=(Signal&& signal);
 
   TSIG_CHECK_RESULT Sigcon Connect(const Handler& handler);
+  TSIG_CHECK_RESULT Sigcon Connect(Handler&& handler);
   void Emit(Param&&... param) const;
 
  private:
@@ -114,13 +115,16 @@ class SigdatBase {
 template <typename... Param>
 class Sigdat<void(Param...)> final : public SigdatBase {
  public:
-  std::size_t AddHandler(const std::function<void(Param...)>& handler);
+  using Handler = std::function<void(Param...)>;
+
+  std::size_t AddHandler(const Handler& handler);
+  std::size_t AddHandler(Handler&& handler);
   void CallHandlers(Param&&... param) const;
   void RemoveHandler(std::size_t handler_id) final;
 
  private:
   std::size_t incremental_handler_id_ = 0u;
-  std::map<std::size_t, std::function<void(Param...)>> handlers_;
+  std::map<std::size_t, std::shared_ptr<Handler>> handler_ptrs_;
 };
 
 }  // namespace detail
@@ -206,6 +210,13 @@ Sigcon Signal<void(Param...)>::Connect(const Signal::Handler& handler)
 }
 
 template <typename... Param>
+Sigcon Signal<void(Param...)>::Connect(Signal::Handler&& handler)
+{
+  const std::size_t handler_id = sigdat_ptr_->AddHandler(std::move(handler));
+  return Sigcon(sigdat_ptr_, handler_id);
+}
+
+template <typename... Param>
 void Signal<void(Param...)>::Emit(Param&&... param) const
 {
   sigdat_ptr_->CallHandlers(std::forward<Param>(param)...);
@@ -214,9 +225,16 @@ void Signal<void(Param...)>::Emit(Param&&... param) const
 namespace detail {
 
 template <typename... Param>
-std::size_t Sigdat<void(Param...)>::AddHandler(const std::function<void(Param...)>& handler)
+std::size_t Sigdat<void(Param...)>::AddHandler(const Handler& handler)
 {
-  handlers_.emplace(incremental_handler_id_, handler);
+  handler_ptrs_.emplace(incremental_handler_id_, std::make_shared<Handler>(handler));
+  return incremental_handler_id_++;
+}
+
+template <typename... Param>
+std::size_t Sigdat<void(Param...)>::AddHandler(Handler&& handler)
+{
+  handler_ptrs_.emplace(incremental_handler_id_, std::make_shared<Handler>(std::move(handler)));
   return incremental_handler_id_++;
 }
 
@@ -224,19 +242,19 @@ template <typename... Param>
 void Sigdat<void(Param...)>::CallHandlers(Param&&... param) const
 {
   // Copy handlers to prevent in-flight modifications
-  const auto handlers = handlers_;
+  const auto handler_ptrs = handler_ptrs_;
   // TODO It would be more efficient to only copy if a modification takes place
-  for (const auto& handler_pair : handlers) {
-    const std::function<void(Param...)>& handler = std::get<1>(handler_pair);
+  for (const auto& handler_pair : handler_ptrs) {
+    const std::shared_ptr<Handler> handler_ptr = std::get<1>(handler_pair);
     // TODO Better exception handling
-    handler(std::forward<Param>(param)...);
+    (*handler_ptr)(std::forward<Param>(param)...);
   }
 }
 
 template <typename... Param>
 void Sigdat<void(Param...)>::RemoveHandler(std::size_t handler_id)
 {
-  handlers_.erase(handler_id);
+  handler_ptrs_.erase(handler_id);
 }
 
 }  // namespace detail
