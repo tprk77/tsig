@@ -87,10 +87,10 @@ class Signal<void(Param...)> {
 
   Signal();
   Signal(const Signal&) = delete;
-  Signal(Signal&& signal);
+  Signal(Signal&& signal) = default;
 
   Signal& operator=(const Signal&) = delete;
-  Signal& operator=(Signal&& signal);
+  Signal& operator=(Signal&& signal) = default;
 
   TSIG_CHECK_RESULT Sigcon Connect(const Handler& handler);
   TSIG_CHECK_RESULT Sigcon Connect(Handler&& handler);
@@ -186,20 +186,6 @@ template <typename... Param>
 Signal<void(Param...)>::Signal() : sigdat_ptr_(std::make_shared<detail::Sigdat<void(Param...)>>())
 {
   // Do nothing
-}
-
-template <typename... Param>
-Signal<void(Param...)>::Signal(Signal&& signal) : sigdat_ptr_(std::move(signal.sigdat_ptr_))
-{
-  signal.sigdat_ptr_ = nullptr;
-}
-
-template <typename... Param>
-Signal<void(Param...)>& Signal<void(Param...)>::operator=(Signal&& signal)
-{
-  sigdat_ptr_ = std::move(signal.sigdat_ptr_);
-  signal.sigdat_ptr_ = nullptr;
-  return *this;
 }
 
 template <typename... Param>
