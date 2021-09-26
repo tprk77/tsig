@@ -3,7 +3,7 @@
 #include <fmt/format.h>
 #include <gtest/gtest.h>
 
-#include "tsig/signal.hpp"
+#include <tsig/signal.hpp>
 
 constexpr std::size_t NUM_MULTI_TESTERS = 10;
 
@@ -322,6 +322,48 @@ TEST(Signal, DropDuringEmit)
     ASSERT_EQ(tester.NumCalls(), 1u);
     EXPECT_EQ(tester.CalledArgs(0), VoidSignalArgs("BLUE", 1, 2));
   }
+}
+
+TEST(SignalConnector, Construct)
+{
+  VoidSignal signal;
+  VoidSignalTester tester;
+  tsig::SignalConnector<void(const std::string&, int, int)> connector(signal);
+}
+
+TEST(SignalConnector, ConnectHandlerCopy)
+{
+  VoidSignal signal;
+  VoidSignalTester tester;
+  CopyMoveWrapper<VoidSignalTester> wrapper(tester);
+  tsig::SignalConnector<void(const std::string&, int, int)> connector(signal);
+  const tsig::Sigcon sigcon = connector(wrapper);
+  EXPECT_EQ(tester.NumCalls(), 0u);
+  EXPECT_EQ(wrapper.CopyCount(), 1u);
+  // NOTE The wrapper will get moved inside std::function
+  EXPECT_EQ(wrapper.MoveCount(), 1u);
+}
+
+TEST(SignalConnector, ConnectHandlerMove)
+{
+  VoidSignal signal;
+  VoidSignalTester tester;
+  CopyMoveWrapper<VoidSignalTester> wrapper(tester);
+  CopyMoveWrapper<VoidSignalTester> move_wrapper(wrapper);
+  wrapper.ResetCounts();
+  tsig::SignalConnector<void(const std::string&, int, int)> connector(signal);
+  const tsig::Sigcon sigcon = connector(std::move(move_wrapper));
+  EXPECT_EQ(tester.NumCalls(), 0u);
+  EXPECT_EQ(wrapper.CopyCount(), 0u);
+  // NOTE The wrapper will get moved inside std::function
+  EXPECT_EQ(wrapper.MoveCount(), 2u);
+}
+
+TEST(SignalConnector, MakeSignalConnector)
+{
+  VoidSignal signal;
+  VoidSignalTester tester;
+  auto connector = tsig::MakeSignalConnector(signal);
 }
 
 int main(int argc, char** argv)

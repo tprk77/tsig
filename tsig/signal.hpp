@@ -47,6 +47,9 @@ class Sigcon;
 template <typename Func>
 class Signal;
 
+template <typename Func>
+class SignalConnector;
+
 namespace detail {
 
 static constexpr std::size_t INVALID_HANDLER_ID = std::numeric_limits<std::size_t>::max();
@@ -61,6 +64,8 @@ class Sigdat;
 class Sigcon {
   template <typename Func>
   friend class Signal;
+  template <typename Func>
+  friend class SignalConnector;
 
  public:
   Sigcon();
@@ -82,6 +87,8 @@ class Sigcon {
 
 template <typename... Param>
 class Signal<void(Param...)> {
+  friend class SignalConnector<void(Param...)>;
+
  public:
   using Handler = std::function<void(Param...)>;
 
@@ -103,6 +110,31 @@ class Signal<void(Param...)> {
 // template <typename Ret, typename ...Param>
 // class Signal<Ret(Param...)> : private SignalBase {
 // };
+
+template <typename Func>
+class SignalConnector {
+ public:
+  using Handler = typename Signal<Func>::Handler;
+
+  explicit SignalConnector(Signal<Func>& signal);
+  SignalConnector(const SignalConnector&) = default;
+  SignalConnector(SignalConnector&&) = default;
+
+  SignalConnector& operator=(const SignalConnector&) = default;
+  SignalConnector& operator=(SignalConnector&&) = default;
+
+  TSIG_CHECK_RESULT Sigcon Connect(const Handler& handler);
+  TSIG_CHECK_RESULT Sigcon Connect(Handler&& handler);
+
+  TSIG_CHECK_RESULT Sigcon operator()(const Handler& handler);
+  TSIG_CHECK_RESULT Sigcon operator()(Handler&& handler);
+
+ private:
+  std::weak_ptr<detail::Sigdat<Func>> sigdat_wptr_;
+};
+
+template <typename Func>
+SignalConnector<Func> MakeSignalConnector(Signal<Func>& signal);
 
 namespace detail {
 
@@ -206,6 +238,52 @@ template <typename... Param>
 void Signal<void(Param...)>::Emit(Param&&... param) const
 {
   sigdat_ptr_->CallHandlers(std::forward<Param>(param)...);
+}
+
+template <typename Func>
+SignalConnector<Func>::SignalConnector(Signal<Func>& signal) : sigdat_wptr_(signal.sigdat_ptr_)
+{
+  // Do nothing
+}
+
+template <typename Func>
+Sigcon SignalConnector<Func>::Connect(const Handler& handler)
+{
+  const std::shared_ptr<detail::Sigdat<Func>> sigdat_ptr = sigdat_wptr_.lock();
+  if (!sigdat_ptr) {
+    return {};
+  }
+  const std::size_t handler_id = sigdat_ptr->AddHandler(handler);
+  return Sigcon(sigdat_ptr, handler_id);
+}
+
+template <typename Func>
+Sigcon SignalConnector<Func>::Connect(Handler&& handler)
+{
+  const std::shared_ptr<detail::Sigdat<Func>> sigdat_ptr = sigdat_wptr_.lock();
+  if (!sigdat_ptr) {
+    return {};
+  }
+  const std::size_t handler_id = sigdat_ptr->AddHandler(std::move(handler));
+  return Sigcon(sigdat_ptr, handler_id);
+}
+
+template <typename Func>
+Sigcon SignalConnector<Func>::operator()(const Handler& handler)
+{
+  return Connect(handler);
+}
+
+template <typename Func>
+Sigcon SignalConnector<Func>::operator()(Handler&& handler)
+{
+  return Connect(std::move(handler));
+}
+
+template <typename Func>
+SignalConnector<Func> MakeSignalConnector(Signal<Func>& signal)
+{
+  return SignalConnector<Func>(signal);
 }
 
 namespace detail {
