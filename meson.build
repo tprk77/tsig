@@ -35,6 +35,10 @@ signal_test = executable(
   'signal_test', 'tests/signal_test.cpp', dependencies : [tsig_dep, gtest_dep])
 test('signal_test', signal_test)
 
+# Examples
+node_example = executable(
+  'node_example', 'examples/node_example.cpp', dependencies : [tsig_dep])
+
 ###########
 # Install #
 ###########
