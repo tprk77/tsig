@@ -1,0 +1,23 @@
+name: Build
+on:
+  push:
+  pull_request:
+  schedule:
+    # Run at least once a month
+    - cron: '0 10 1 * *'
+
+jobs:
+  ubuntu-build:
+    name: Ubuntu Build
+    runs-on: ubuntu-20.04
+    container:
+      image: ${{matrix.container}}
+    strategy:
+      matrix:
+        container:
+          - tprk77/tsigci:ubuntu1804
+          - tprk77/tsigci:ubuntu2004
+    steps:
+      - uses: actions/checkout@v2
+      - run: meson setup --buildtype release rbuild
+      - run: ninja -v -C rbuild
