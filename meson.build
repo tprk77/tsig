@@ -1,5 +1,7 @@
 # meson.build
 
+# Copyright (c) 2021 Tim Perkins
+
 ###########
 # Project #
 ###########
